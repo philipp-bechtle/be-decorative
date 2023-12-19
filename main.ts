@@ -1,134 +1,161 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { FileSystemAdapter, Notice, Plugin, debounce } from 'obsidian';
+import { DecorationType } from 'deconfig';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Remember to rename these classes and interfaces!
+export default class BeDecorativePlugin extends Plugin {
+    private settingsMap = new Map<string, DecorationType>();
 
-interface MyPluginSettings {
-	mySetting: string;
-}
+    async onload() {
+        this.initializeFileWatcher();
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+        this.registerEvent(
+            this.app.workspace.on("file-menu", (menu, file) => {
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Set not started")
+                        .setIcon("x-circle")
+                        .setSection("be-decoration")
+                        .onClick(async () => {
+                            this.settingsMap.set(file.path, DecorationType.D_TYPE_RED);
+                            this.saveSettingsMapToDisk();
+                            this.generateColorStyles();
+                            this.applyColorStyles();
+                        });
+                });
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Set in progress")
+                        .setIcon("circle")
+                        .setSection("be-decoration")
+                        .onClick(async () => {
+                            this.settingsMap.set(file.path, DecorationType.D_TYPE_ORANGE);
+                            this.saveSettingsMapToDisk();
+                            this.generateColorStyles();
+                            this.applyColorStyles();
+                        });
+                });
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Set documented")
+                        .setIcon("check-circle-2")
+                        .setSection("be-decoration")
+                        .onClick(async () => {
+                            this.settingsMap.set(file.path, DecorationType.D_TYPE_GREEN);
+                            this.saveSettingsMapToDisk();
+                            this.generateColorStyles();
+                            this.applyColorStyles();
+                        });
+                });
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Remove markings")
+                        .setIcon("eraser")
+                        .setSection("be-decoration")
+                        .setDisabled(!this.settingsMap.has(file.path))
+                        .onClick(async () => {
+                            this.settingsMap.delete(file.path);
+                            this.saveSettingsMapToDisk();
+                            this.generateColorStyles();
+                            this.applyColorStyles();
+                        });
+                });
+            })
+        );
+    }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+    onunload() {
 
-	async onload() {
-		await this.loadSettings();
+    }
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+    generateColorStyles(): void {
+        let colorStyleElement = document.getElementById('beDecorationStyles');
+        if (!colorStyleElement) {
+            colorStyleElement = this.app.workspace.containerEl.createEl('style');
+            colorStyleElement.id = 'beDecorationStyles';
+        }
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+        colorStyleElement.innerHTML = [
+            '.decfile-color-color-red { --decfile-color-color: var(--color-red); }',
+            '.decfile-color-color-orange { --decfile-color-color: var(--color-orange); }',
+            '.decfile-color-color-green { --decfile-color-color: var(--color-green); }'
+        ].join('\n');
+    }
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+    applyColorStyles = debounce(this.applyColorStylesInternal, 50, true);
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
+    private applyColorStylesInternal() : void {
+        // fixme: read from file config
+        const fileExplorers = this.app.workspace.getLeavesOfType('file-explorer');
+        fileExplorers.forEach((fileExplorer) => {
+            Object.entries(fileExplorer.view.fileItems).forEach(([path, fileItem]) => {
+                const itemClasses = fileItem.el.classList.value.split(' ').filter((cls) => !cls.startsWith('decfile-color'));
+                if (path === "/") return;
+                if (this.settingsMap.has(path)) {
+                    itemClasses.push('decfile-color-file');
+                    itemClasses.push('decfile-color-type-text');
+                    const value = this.settingsMap.get(path);
+                    if (value === undefined) return;
+                    switch (value) {
+                        case DecorationType.D_TYPE_GREEN:
+                            itemClasses.push('decfile-color-color-green');
+                        break;
+                        case DecorationType.D_TYPE_ORANGE:
+                            itemClasses.push('decfile-color-color-orange');
+                        break;
+                        case DecorationType.D_TYPE_RED:
+                            itemClasses.push('decfile-color-color-red');
+                        break;
+                    }
+                }
+                fileItem.el.classList.value = itemClasses.join(' ');
+            });
+        });
+    }
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+    private getVaultBasePath() : string | null {
+        let adapter = this.app.vault.adapter;
+        if (adapter instanceof FileSystemAdapter) {
+            return adapter.getBasePath();
+        }
+        return null;
+    }
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+    private saveSettingsMapToDisk() : void {
+        const vaultConfigPath = this.getVaultConfigPath();
+        if (!vaultConfigPath) return;
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+        const serilizedText = JSON.stringify(Array.from(this.settingsMap.entries()));
+        fs.writeFileSync(vaultConfigPath, serilizedText);
+    }
 
-	onunload() {
+    private reloadSettingsMapFromDisk() : void {
+        const vaultConfigPath = this.getVaultConfigPath();
+        if (!vaultConfigPath) return;
+        if (!fs.existsSync(vaultConfigPath)) {
+            this.settingsMap = new Map<string, DecorationType>();
+            return;
+        }
+        const fileText = fs.readFileSync(vaultConfigPath, 'utf-8');
+        this.settingsMap = new Map(JSON.parse(fileText));
 
-	}
+    }
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
+    private getVaultConfigPath() : string | null {
+        const vaultRoot = this.getVaultBasePath();
+        if (!vaultRoot) return null;
+        const vaultConfigPath = path.join(vaultRoot, 'decorations.json');
+        return vaultConfigPath;
+    }
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+    private initializeFileWatcher() : void {
+        const vaultConfigPath = this.getVaultConfigPath();
+        if (!vaultConfigPath) return;
+        this.reloadSettingsMapFromDisk();
+        fs.watchFile(vaultConfigPath, (curr, prev) => {
+            this.reloadSettingsMapFromDisk();
+            this.generateColorStyles();
+            this.applyColorStyles();
+        });
+    }
 }

@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "be-decoration",
+	"name": "BeDecorative",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Simple file-local note decoration from Bechtle employees for Bechtle employees.",
+	"author": "Philipp Auer",
+	"authorUrl": "https://no.tld",
 	"isDesktopOnly": false
 }
