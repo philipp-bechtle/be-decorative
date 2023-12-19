@@ -3,6 +3,8 @@ import { DecorationType } from 'deconfig';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const CONFIG_FILE_NAME = "decorations.txt";
+
 export default class BeDecorativePlugin extends Plugin {
     private settingsMap = new Map<string, DecorationType>();
 
@@ -144,7 +146,7 @@ export default class BeDecorativePlugin extends Plugin {
     private getVaultConfigPath() : string | null {
         const vaultRoot = this.getVaultBasePath();
         if (!vaultRoot) return null;
-        const vaultConfigPath = path.join(vaultRoot, 'decorations.json');
+        const vaultConfigPath = path.join(vaultRoot, CONFIG_FILE_NAME);
         return vaultConfigPath;
     }
 
