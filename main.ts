@@ -1,4 +1,4 @@
-import { FileSystemAdapter, Notice, Plugin, debounce } from 'obsidian';
+import { FileSystemAdapter, Menu, Plugin, TAbstractFile, debounce } from 'obsidian';
 import { DecorationType } from 'deconfig';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,52 +11,14 @@ export default class BeDecorativePlugin extends Plugin {
     async onload() {
         this.initializeFileWatcher();
         this.registerEvent(
+            this.app.workspace.on("files-menu", (menu, files, source) => {
+                if (source !== 'file-explorer-context-menu') return;
+                this.addEntriesToContextMenu(menu, files);
+            })
+        );
+        this.registerEvent(
             this.app.workspace.on("file-menu", (menu, file) => {
-                menu.addItem((item) => {
-                    item
-                        .setTitle("Set not started")
-                        .setIcon("x-circle")
-                        .setSection("be-decoration")
-                        .onClick(async () => {
-                            this.settingsMap.set(file.path, DecorationType.D_TYPE_RED);
-                            this.saveSettingsMapToDisk();
-                            this.applyColorStyles();
-                        });
-                });
-                menu.addItem((item) => {
-                    item
-                        .setTitle("Set in progress")
-                        .setIcon("circle")
-                        .setSection("be-decoration")
-                        .onClick(async () => {
-                            this.settingsMap.set(file.path, DecorationType.D_TYPE_ORANGE);
-                            this.saveSettingsMapToDisk();
-                            this.applyColorStyles();
-                        });
-                });
-                menu.addItem((item) => {
-                    item
-                        .setTitle("Set documented")
-                        .setIcon("check-circle-2")
-                        .setSection("be-decoration")
-                        .onClick(async () => {
-                            this.settingsMap.set(file.path, DecorationType.D_TYPE_GREEN);
-                            this.saveSettingsMapToDisk();
-                            this.applyColorStyles();
-                        });
-                });
-                menu.addItem((item) => {
-                    item
-                        .setTitle("Remove markings")
-                        .setIcon("eraser")
-                        .setSection("be-decoration")
-                        .setDisabled(!this.settingsMap.has(file.path))
-                        .onClick(async () => {
-                            this.settingsMap.delete(file.path);
-                            this.saveSettingsMapToDisk();
-                            this.applyColorStyles();
-                        });
-                });
+                this.addEntriesToContextMenu(menu, [file]);
             })
         );
 
@@ -181,6 +143,56 @@ export default class BeDecorativePlugin extends Plugin {
         fs.watchFile(vaultConfigPath, (curr, prev) => {
             this.reloadSettingsMapFromDisk();
             this.applyColorStyles();
+        });
+    }
+
+    private addEntriesToContextMenu(menu: Menu, files: TAbstractFile[]) {
+        menu.addItem((item) => {
+            item
+                .setTitle("Set not started")
+                .setIcon("x-circle")
+                .setSection("be-decoration")
+                .onClick(async () => {
+                    files.forEach(file => this.settingsMap.set(file.path, DecorationType.D_TYPE_RED));
+                    this.saveSettingsMapToDisk();
+                    this.applyColorStyles();
+                });
+        });
+        menu.addItem((item) => {
+            item
+                .setTitle("Set in progress")
+                .setIcon("circle")
+                .setSection("be-decoration")
+                .onClick(async () => {
+                    files.forEach(file => this.settingsMap.set(file.path, DecorationType.D_TYPE_ORANGE));
+                    this.saveSettingsMapToDisk();
+                    this.applyColorStyles();
+                });
+        });
+        menu.addItem((item) => {
+            item
+                .setTitle("Set documented")
+                .setIcon("check-circle-2")
+                .setSection("be-decoration")
+                .onClick(async () => {
+                    files.forEach(file => this.settingsMap.set(file.path, DecorationType.D_TYPE_GREEN));
+                    this.saveSettingsMapToDisk();
+                    this.applyColorStyles();
+                });
+        });
+        menu.addItem((item) => {
+            item
+                .setTitle("Remove markings")
+                .setIcon("eraser")
+                .setSection("be-decoration")
+                .setDisabled(!files.some(file => this.settingsMap.has(file.path)))
+                .onClick(async () => {
+                    files.forEach(file => {
+                        if (this.settingsMap.has(file.path)) this.settingsMap.delete(file.path);
+                    });
+                    this.saveSettingsMapToDisk();
+                    this.applyColorStyles();
+                });
         });
     }
 }
