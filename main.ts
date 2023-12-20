@@ -10,7 +10,6 @@ export default class BeDecorativePlugin extends Plugin {
 
     async onload() {
         this.initializeFileWatcher();
-
         this.registerEvent(
             this.app.workspace.on("file-menu", (menu, file) => {
                 menu.addItem((item) => {
@@ -21,7 +20,6 @@ export default class BeDecorativePlugin extends Plugin {
                         .onClick(async () => {
                             this.settingsMap.set(file.path, DecorationType.D_TYPE_RED);
                             this.saveSettingsMapToDisk();
-                            this.generateColorStyles();
                             this.applyColorStyles();
                         });
                 });
@@ -33,7 +31,6 @@ export default class BeDecorativePlugin extends Plugin {
                         .onClick(async () => {
                             this.settingsMap.set(file.path, DecorationType.D_TYPE_ORANGE);
                             this.saveSettingsMapToDisk();
-                            this.generateColorStyles();
                             this.applyColorStyles();
                         });
                 });
@@ -45,7 +42,6 @@ export default class BeDecorativePlugin extends Plugin {
                         .onClick(async () => {
                             this.settingsMap.set(file.path, DecorationType.D_TYPE_GREEN);
                             this.saveSettingsMapToDisk();
-                            this.generateColorStyles();
                             this.applyColorStyles();
                         });
                 });
@@ -58,16 +54,44 @@ export default class BeDecorativePlugin extends Plugin {
                         .onClick(async () => {
                             this.settingsMap.delete(file.path);
                             this.saveSettingsMapToDisk();
-                            this.generateColorStyles();
                             this.applyColorStyles();
                         });
                 });
             })
         );
+
+        this.app.workspace.onLayoutReady(async () => {
+            this.generateColorStyles();
+            this.applyColorStyles();
+        });
+
+        this.registerEvent(
+            this.app.workspace.on('layout-change', () => this.applyColorStyles())
+        );
+
+        this.registerEvent(
+            this.app.vault.on('rename', async (newFile, oldPath) => {
+                const oldEntry = this.settingsMap.get(oldPath);
+                if (oldEntry === undefined) return;
+                this.settingsMap.set(newFile.path, oldEntry);
+                this.settingsMap.delete(oldPath);
+                this.saveSettingsMapToDisk();
+                this.applyColorStyles();
+            })
+        );
+
+        this.registerEvent(
+            this.app.vault.on('delete', async (file) => {
+                if (this.settingsMap.has(file.path)) {
+                    this.settingsMap.delete(file.path);
+                    this.saveSettingsMapToDisk();
+                }
+            })
+        );
     }
 
     onunload() {
-
+        document.getElementById('beDecorationStyles')?.remove();
     }
 
     generateColorStyles(): void {
@@ -86,7 +110,7 @@ export default class BeDecorativePlugin extends Plugin {
 
     applyColorStyles = debounce(this.applyColorStylesInternal, 50, true);
 
-    private applyColorStylesInternal() : void {
+    private applyColorStylesInternal(): void {
         // fixme: read from file config
         const fileExplorers = this.app.workspace.getLeavesOfType('file-explorer');
         fileExplorers.forEach((fileExplorer) => {
@@ -101,13 +125,13 @@ export default class BeDecorativePlugin extends Plugin {
                     switch (value) {
                         case DecorationType.D_TYPE_GREEN:
                             itemClasses.push('decfile-color-color-green');
-                        break;
+                            break;
                         case DecorationType.D_TYPE_ORANGE:
                             itemClasses.push('decfile-color-color-orange');
-                        break;
+                            break;
                         case DecorationType.D_TYPE_RED:
                             itemClasses.push('decfile-color-color-red');
-                        break;
+                            break;
                     }
                 }
                 fileItem.el.classList.value = itemClasses.join(' ');
@@ -115,7 +139,7 @@ export default class BeDecorativePlugin extends Plugin {
         });
     }
 
-    private getVaultBasePath() : string | null {
+    private getVaultBasePath(): string | null {
         let adapter = this.app.vault.adapter;
         if (adapter instanceof FileSystemAdapter) {
             return adapter.getBasePath();
@@ -123,7 +147,7 @@ export default class BeDecorativePlugin extends Plugin {
         return null;
     }
 
-    private saveSettingsMapToDisk() : void {
+    private saveSettingsMapToDisk(): void {
         const vaultConfigPath = this.getVaultConfigPath();
         if (!vaultConfigPath) return;
 
@@ -131,7 +155,7 @@ export default class BeDecorativePlugin extends Plugin {
         fs.writeFileSync(vaultConfigPath, serilizedText);
     }
 
-    private reloadSettingsMapFromDisk() : void {
+    private reloadSettingsMapFromDisk(): void {
         const vaultConfigPath = this.getVaultConfigPath();
         if (!vaultConfigPath) return;
         if (!fs.existsSync(vaultConfigPath)) {
@@ -143,20 +167,19 @@ export default class BeDecorativePlugin extends Plugin {
 
     }
 
-    private getVaultConfigPath() : string | null {
+    private getVaultConfigPath(): string | null {
         const vaultRoot = this.getVaultBasePath();
         if (!vaultRoot) return null;
         const vaultConfigPath = path.join(vaultRoot, CONFIG_FILE_NAME);
         return vaultConfigPath;
     }
 
-    private initializeFileWatcher() : void {
+    private initializeFileWatcher(): void {
         const vaultConfigPath = this.getVaultConfigPath();
         if (!vaultConfigPath) return;
         this.reloadSettingsMapFromDisk();
         fs.watchFile(vaultConfigPath, (curr, prev) => {
             this.reloadSettingsMapFromDisk();
-            this.generateColorStyles();
             this.applyColorStyles();
         });
     }
