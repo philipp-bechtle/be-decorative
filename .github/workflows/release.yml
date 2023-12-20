@@ -27,8 +27,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
-
+          mkdir be-decorative
+          cp main.js be-decorative
+          cp manifest.json be-decorative
+          cp styles.css be-decorative
+          zip -r be-decorative.zip be-decorative/
           gh release create "$tag" \
             --title="$tag" \
-            --draft \
-            main.js manifest.json styles.css
+            be-decorative.zip
